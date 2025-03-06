@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memory Allocation Simulator</title>
+<style>
+    body {
+        font-family: sans-serif;
+        margin: 0;
+        padding: 0;
+    }
+    h2 {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-size: 30px;
+        font-weight: 900;
+        text-decoration: underline;
+        text-transform: uppercase;
+        color: #c8b6ff;
+    }
+    .container {
+        width: 100%;
+        min-height: 100vh;
+        background-color: #121212;
+        display:flex ;
+        flex-direction: column;
+        align-items: center;
+    }
+    #input {
+        background-color: #edf2f4;
+        max-width: 800px;
+        margin: 15px auto;
+        padding: 20px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+    }
+    label {
+        font-size: 17px;
+        font-weight: 600;
+    }
+    input[type="text"] {
+        padding: 8px 20px;
+        margin: 20px 10px;
+    }
+    button {
+        padding: 10px 25px;
+        cursor: pointer;
+        background-color: #e7c6ff;
+        color: white;
+        border: none;
+        font-size:16px ;
+        border-radius: 20px;
+        font-weight: 600;
+        margin: auto;
+    }
+    button:hover {
+        background-color: #cdb4db;
+    }
+    .unallocate{
+        color: red;
+    }
+    .blocks-container {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        background-color: #f2f2f2;  
+    }
+    .block {
+        background-color: white;
+        border: 1px solid #000;
+        padding: 10px;
+        flex-grow: 1;
+        max-width: calc(33.33% - 20px);
+        margin: 30px; 
+    }
+    .block-header {
+        text-align: center;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+    .block-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;  
+    }
+    .flexbox {
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+        width: 100%;
+    }
+    .allocated, .unallocated {
+        flex-grow: 1;
+        text-align: center;
+    }
+    .allocated {
+        padding: 5px 10px;
+        background-color: lightgreen;
+    }
+    .unallocated {
+        padding: 5px 10px;
+        background-color: lightgray;
+    }
+    h4 {
+        margin-top: 40px;
+        margin-left: 50px;
+    }
+    h3 {
+        margin-top: 20px;
+    }
+    .not-allocated {
+        color: red;
+        font-weight: bold;
+        margin-top: 20px;
+    }
+</style>
+</head>
+<body>
+<div class="container">
+    <h2>Memory Allocation Simulator</h2>
+    <div id="input">
+        <label for="processSizes">Enter sizes of processes (comma-separated):</label>
+        <input type="text" id="processSizes" placeholder="Enter the size of process"><br>
+        <label for="blockSizes" >Enter sizes of memory blocks (comma-separated):</label>
+        <input type="text" id="blockSizes" placeholder="Enter the size of blocks"><br>
+        <button onclick="setup()">Setup</button>
+    </div>
+    <div id="simulation">
+        <div id="firstFitAllocation" class="blocks-container"></div>
+        <div id="unallocatedProcessesFirstFit" class="unallocate"></div>
+
+        <div id="bestFitAllocation" class="blocks-container"></div>
+        <div id="unallocatedProcessesBestFit" class="unallocate"></div>
+
+        <div id="worstFitAllocation" class="blocks-container"></div>
+        <div id="unallocatedProcessesWorstFit" class="unallocate"></div>
+
+        <div id="nextFitAllocation" class="blocks-container"></div>
+        <div id="unallocatedProcessesNextFit" class="unallocate"></div>
+    </div>
+</div>
+
+<script>
+    function setup() {
+        var processSizesInput = document.getElementById("processSizes").value;
+        var blockSizesInput = document.getElementById("blockSizes").value;
+
+        var processes = processSizesInput.split(",").map(function(size) {
+            return parseInt(size.trim());
+        });
+
+        var blocks = blockSizesInput.split(",").map(function(size) {
+            return parseInt(size.trim());
+        });
+
+        displayAllocation(processes, blocks);
+    }
+
+    function displayAllocation(processes, blocks) {
+        var firstFitAllocation = firstFit(processes, blocks.slice());
+        var bestFitAllocation = bestFit(processes, blocks.slice());
+        var worstFitAllocation = worstFit(processes, blocks.slice());
+        var nextFitAllocation = nextFit(processes, blocks.slice());
+
+        displayMemory("First Fit", firstFitAllocation, "firstFitAllocation", blocks, processes);
+        displayMemory("Best Fit", bestFitAllocation, "bestFitAllocation", blocks, processes);
+        displayMemory("Worst Fit", worstFitAllocation, "worstFitAllocation", blocks, processes);
+        displayMemory("Next Fit", nextFitAllocation, "nextFitAllocation", blocks, processes);
+
+        var unallocatedFirstFit = findUnallocatedProcesses(processes, firstFitAllocation);
+        var unallocatedBestFit = findUnallocatedProcesses(processes, bestFitAllocation);
+        var unallocatedWorstFit = findUnallocatedProcesses(processes, worstFitAllocation);
+        var unallocatedNextFit = findUnallocatedProcesses(processes, nextFitAllocation);
+
+        displayUnallocatedProcesses(unallocatedFirstFit, "unallocatedProcessesFirstFit");
+        displayUnallocatedProcesses(unallocatedBestFit, "unallocatedProcessesBestFit");
+        displayUnallocatedProcesses(unallocatedWorstFit, "unallocatedProcessesWorstFit");
+        displayUnallocatedProcesses(unallocatedNextFit, "unallocatedProcessesNextFit");
+    }
+
+    function firstFit(processes, blocks) {
+        var allocation = new Array(blocks.length).fill(-1);
+        for (var i = 0; i < processes.length; i++) {
+            for (var j = 0; j < blocks.length; j++) {
+                if (blocks[j] >= processes[i] && allocation[j] === -1) {
+                    allocation[j] = i;
+                    break;
+                }
+            }
+        }
+        return allocation;
+    }
+
+    function bestFit(processes, blocks) {
+        var allocation = new Array(blocks.length).fill(-1);
+        for (var i = 0; i < processes.length; i++) {
+            var bestIndex = -1;
+            for (var j = 0; j < blocks.length; j++) {
+                if (blocks[j] >= processes[i] && allocation[j] === -1) {
+                    if (bestIndex === -1 || blocks[j] < blocks[bestIndex]) {
+                        bestIndex = j;
+                    }
+                }
+            }
+            if (bestIndex !== -1) {
+                allocation[bestIndex] = i;
+            }
+        }
+        return allocation;
+    }
+
+    function worstFit(processes, blocks) {
+        var allocation = new Array(blocks.length).fill(-1);
+        for (var i = 0; i < processes.length; i++) {
+            var worstIndex = -1;
+            for (var j = 0; j < blocks.length; j++) {
+                if (blocks[j] >= processes[i] && allocation[j] === -1) {
+                    if (worstIndex === -1 || blocks[j] > blocks[worstIndex]) {
+                        worstIndex = j;
+                    }
+                }
+            }
+            if (worstIndex !== -1) {
+                allocation[worstIndex] = i;
+            }
+        }
+        return allocation;
+    }
+
+    function nextFit(processes, blocks) {
+        var allocation = new Array(blocks.length).fill(-1);
+        var lastIndex = 0;
+        for (var i = 0; i < processes.length; i++) {
+            for (var j = lastIndex; j < blocks.length; j++) {
+                if (blocks[j] >= processes[i] && allocation[j] === -1) {
+                    allocation[j] = i;
+                    lastIndex = j;
+                    break;
+                }
+            }
+        }
+        return allocation;
+    }
+
+    function findUnallocatedProcesses(processes, allocation) {
+    var unallocated = [];
+    for (var i = 0; i < processes.length; i++) {
+        var allocated = false;
+        for (var j = 0; j < allocation.length; j++) {
+            if (allocation[j] === i) {
+                allocated = true;
+                break;
+            }
+        }
+        if (!allocated) {
+            unallocated.push(i + 1); // Adjust indexing here
+        }
+    }
+    return unallocated;
+}
+
+
+
+
+    function displayMemory(title, allocation, divId, blocks, processes) {
+        var div = document.getElementById(divId);
+        div.innerHTML = "<h4>" + title + "</h4>";
+        for (var i = 0; i < blocks.length; i++) {
+            var block = "<div class='block'>";
+            block += "<div class='block-header'>Block " + (i + 1) + "</div>";
+            block += "<div class='block-content'>";
+            if (allocation[i] !== -1) {
+                block += "<div class='flexbox'><p class='allocated'>Process " + (allocation[i]+1) + "</p><p class='unallocated'>Remaining: " + (blocks[i] - processes[allocation[i]]) + "</p></div>";
+            } else {
+                block += "<p class='unallocated'>Free: " + blocks[i] + "</p>";
+            }
+            block += "</div>";
+            block += "</div>";
+            div.innerHTML += block;
+        }
+    }
+
+    function displayUnallocatedProcesses(unallocated, divId) {
+        var div = document.getElementById(divId);
+        if (unallocated.length > 0) {
+            div.innerHTML += "<div class='not-allocated'><h4>Unallocated Processes:</h4>";
+            unallocated.forEach(function(process) {
+                div.innerHTML += "<p>Process " + process + " = not allocated</p>";
+            });
+            div.innerHTML += "</div>";
+        }
+    }
+</script>
+</body>
+</html>
